@@ -1,0 +1,475 @@
+<?php
+
+namespace App\Filament\Pages;
+
+use App\Models\Alert;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Grid;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Pages\Page;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
+use Filament\Forms\Get;
+use Filament\Forms\Components\Actions;
+use Filament\Forms\Components\Actions\Action;
+use Filament\Forms\Components\Section;
+use Illuminate\Support\Facades\Schema;
+use Carbon\Carbon;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\Indicator;
+use Illuminate\Support\Facades\View;
+use Illuminate\Contracts\View\View as ViewContract;
+
+class AlertRenewalReport extends Page implements HasTable, HasForms
+{
+    use InteractsWithTable;
+    use InteractsWithForms;
+
+    protected static ?string $navigationIcon = 'heroicon-o-bell-alert';
+
+    protected static ?string $navigationGroup = 'Alerts & Monitoring';
+    protected static string $view = 'filament.pages.alert-renewal-report';
+    protected static ?string $navigationLabel = 'Alert Renewal';
+    protected static ?string $title = 'Alert Renewal Report';
+
+    public array $filters = [
+        'start_date' => null,
+        'end_date' => null,
+        'operator' => null,
+        'min_today' => null,
+        'min_yesterday' => 100,
+        'min_drop' => null,
+        'sort_date' => 'desc',
+        'sort_hour' => 'desc',
+        'sort_today' => null,
+        'sort_yesterday' => null,
+        'sort_drop' => 'desc',
+    ];
+
+    protected $listeners = [
+        'refreshTable' => 'handleRefreshTable',
+    ];
+
+    public function handleRefreshTable(): void
+    {
+        $this->resetTable();
+    }
+
+    public function clearFilter(string $field): void
+    {
+        $this->filters[$field] = null;
+        $this->form->fill($this->filters);
+        $this->handleRefreshTable();
+    }
+
+    public function mount(): void
+    {
+        $this->form->fill($this->filters);
+    }
+
+    protected function isSuperAdminUser(): bool
+    {
+        $user = auth()->user();
+        if (! $user || ! method_exists($user, 'hasRole')) {
+            return false;
+        }
+        foreach (['super_admin', 'super-admin', 'superadmin', 'super admin', 'admin'] as $role) {
+            if ($user->hasRole($role)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    protected function getOperatorOptions(): array
+    {
+        if (Schema::hasTable('operators')) {
+            return DB::table('operators')->orderBy('operator')->pluck('operator', 'id')->toArray();
+        }
+
+        if (Schema::hasColumn('alerts', 'operator')) {
+            $rows = Alert::query()->distinct()->orderBy('operator')->pluck('operator')->toArray();
+            return array_combine($rows, $rows) ?: [];
+        }
+
+        return [];
+    }
+
+    public function getFormSchema(): array
+    {
+        return [
+            Grid::make()
+                ->columns([
+                    'sm' => 1,
+                    'md' => 3,
+                ])
+                ->schema([
+                    DatePicker::make('start_date')->label('Start date'),
+                    DatePicker::make('end_date')->label('End date'),
+
+                    Select::make('operator')
+                        ->label('Operator')
+                        ->options(fn () => $this->getOperatorOptions())
+                        ->searchable()
+                        ->placeholder('All operators'),
+
+                    TextInput::make('min_today')
+                        ->label('Min Today')
+                        ->numeric(),
+
+                    TextInput::make('min_yesterday')
+                        ->label('Min Yesterday')
+                        ->numeric(),
+
+                    TextInput::make('min_drop')
+                        ->label('Min Drop')
+                        ->numeric(),
+
+                    Section::make('Sorting')
+                        ->columns(5)
+                        ->compact()
+                        ->schema([
+                            Select::make('sort_date')->label('Sort Date')->options(['' => 'No Sort', 'asc' => 'Asc', 'desc' => 'Desc']),
+                            Select::make('sort_hour')->label('Sort Hour')->options(['' => 'No Sort', 'asc' => 'Asc', 'desc' => 'Desc']),
+                            Select::make('sort_today')->label('Sort Today')->options(['' => 'No Sort', 'asc' => 'Asc', 'desc' => 'Desc']),
+                            Select::make('sort_yesterday')->label('Sort Yesterday')->options(['' => 'No Sort', 'asc' => 'Asc', 'desc' => 'Desc']),
+                            Select::make('sort_drop')->label('Sort Drop')->options(['' => 'No Sort', 'asc' => 'Asc', 'desc' => 'Desc']),
+                        ]),
+
+                    Actions::make([
+                        Action::make('apply')
+                            ->label('Search')
+                            ->button()
+                            ->color('primary')
+                            ->action(function () {
+                                $this->resetTable();
+                                $this->dispatch('refreshTable');
+                            }),
+
+                        Action::make('reset')
+                            ->label('Reset')
+                            ->button()
+                            ->color('secondary')
+                            ->action(function () {
+                                $this->filters = [
+                                    'start_date' => null,
+                                    'end_date' => null,
+                                    'operator' => null,
+                                    'min_today' => null,
+                                    'min_yesterday' => 100,
+                                    'min_drop' => null,
+                                    'sort_date' => 'desc',
+                                    'sort_hour' => 'desc',
+                                    'sort_today' => null,
+                                    'sort_yesterday' => null,
+                                    'sort_drop' => 'desc',
+                                ];
+                                $this->form->fill($this->filters);
+                                $this->resetTableFilters();
+                                $this->resetTable();
+                                $this->dispatch('refreshTable');
+                            }),
+                    ])->columnSpan('full'),
+                ]),
+        ];
+    }
+
+    public function getFormStatePath(): ?string
+    {
+        return 'filters';
+    }
+
+    protected function buildFilteredQuery(): Builder
+    {
+        $rawStart = $this->filters['start_date'] ?? null;
+        $rawEnd = $this->filters['end_date'] ?? null;
+        $operator = $this->filters['operator'] ?? null;
+
+        $start = null;
+        if ($rawStart instanceof Carbon) {
+            $start = $rawStart->toDateString();
+        } elseif (is_string($rawStart) && trim($rawStart) !== '') {
+            try {
+                $start = Carbon::parse($rawStart)->toDateString();
+            } catch (\Throwable $e) {
+                $start = null;
+            }
+        }
+
+        $end = null;
+        if ($rawEnd instanceof Carbon) {
+            $end = $rawEnd->toDateString();
+        } elseif (is_string($rawEnd) && trim($rawEnd) !== '') {
+            try {
+                $end = Carbon::parse($rawEnd)->toDateString();
+            } catch (\Throwable $e) {
+                $end = null;
+            }
+        }
+
+        $query = Alert::query()
+            ->join('countries', 'alerts.id_country', '=', 'countries.id')
+            ->select([
+                'alerts.date',
+                'alerts.hour',
+                'alerts.id_operator',
+                'alerts.id_country',
+                'alerts.type',
+                DB::raw('MAX(alerts.id) as id'),
+                DB::raw('MAX(alerts.created_at) as created_at'),
+                DB::raw('SUM(ROUND(alerts.today * (CASE WHEN UPPER(countries.country) = \'OMAN\' THEN countries.convert_usd / 1000 ELSE countries.convert_usd END), 0)) as today'),
+                DB::raw('SUM(ROUND(alerts.yesterday * (CASE WHEN UPPER(countries.country) = \'OMAN\' THEN countries.convert_usd / 1000 ELSE countries.convert_usd END), 0)) as yesterday'),
+                DB::raw('ROUND(AVG(alerts.drop), 2) as avg_drop'),
+            ])
+            ->groupBy([
+                'alerts.date',
+                'alerts.hour',
+                'alerts.id_operator',
+                'alerts.id_country',
+                'alerts.type',
+            ]);
+
+        // 1. DATA JAM 12, 16, 21, 24
+        $query->whereIn('alerts.hour', [12, 16, 21, 24]);
+
+        // 3. ALERT RENEWAL (type = 'REVENUE')
+        if (Schema::hasColumn('alerts', 'type')) {
+            $query->whereRaw("UPPER(alerts.type) = 'REVENUE'");
+        }
+
+        if (! empty($operator)) {
+            if (Schema::hasColumn('alerts', 'id_operator') && is_numeric($operator)) {
+                $query->where('id_operator', $operator);
+            } elseif (Schema::hasColumn('alerts', 'operator')) {
+                $query->where('operator', $operator);
+            }
+        } else {
+            if (! $this->isSuperAdminUser() && Schema::hasTable('user_has_operators')) {
+                $user = auth()->user();
+                if ($user) {
+                    $ids = DB::table('user_has_operators')->where('id_user', $user->id)->pluck('id_operator')->filter()->unique()->values()->toArray();
+                    if (! empty($ids) && Schema::hasColumn('alerts', 'id_operator')) {
+                        $query->whereIn('id_operator', $ids);
+                    } elseif (! empty($ids) && Schema::hasColumn('alerts', 'operator') && Schema::hasTable('operators')) {
+                        $names = DB::table('operators')->whereIn('id', $ids)->pluck('operator')->toArray();
+                        if (! empty($names)) {
+                            $query->whereIn('operator', $names);
+                        }
+                    } else {
+                        $query->whereRaw('0 = 1');
+                    }
+                }
+            }
+        }
+
+        if (! empty($start) && Schema::hasColumn('alerts', 'date')) {
+            $query->whereDate('alerts.date', '>=', $start);
+        } elseif (! empty($start) && Schema::hasColumn('alerts', 'created_at')) {
+            $query->whereDate('alerts.created_at', '>=', $start);
+        }
+
+        if (! empty($end) && Schema::hasColumn('alerts', 'date')) {
+            $query->whereDate('alerts.date', '<=', $end);
+        } elseif (! empty($end) && Schema::hasColumn('alerts', 'created_at')) {
+            $query->whereDate('alerts.created_at', '<=', $end);
+        }
+
+        if (! empty($this->filters['min_today'])) {
+            $query->having('today', '>=', (float) $this->filters['min_today']);
+        }
+
+        if (! empty($this->filters['min_yesterday'])) {
+            $query->having('yesterday', '>=', (float) $this->filters['min_yesterday']);
+        }
+
+        if (! empty($this->filters['min_drop'])) {
+            $query->havingRaw('((SUM(ROUND(alerts.yesterday * (CASE WHEN UPPER(countries.country) = \'OMAN\' THEN countries.convert_usd / 1000 ELSE countries.convert_usd END), 0)) - SUM(ROUND(alerts.today * (CASE WHEN UPPER(countries.country) = \'OMAN\' THEN countries.convert_usd / 1000 ELSE countries.convert_usd END), 0))) / NULLIF(SUM(ROUND(alerts.yesterday * (CASE WHEN UPPER(countries.country) = \'OMAN\' THEN countries.convert_usd / 1000 ELSE countries.convert_usd END), 0)), 0) * 100) >= ?', [(float) $this->filters['min_drop']]);
+        } else {
+            $query->havingRaw('((SUM(ROUND(alerts.yesterday * (CASE WHEN UPPER(countries.country) = \'OMAN\' THEN countries.convert_usd / 1000 ELSE countries.convert_usd END), 0)) - SUM(ROUND(alerts.today * (CASE WHEN UPPER(countries.country) = \'OMAN\' THEN countries.convert_usd / 1000 ELSE countries.convert_usd END), 0))) / NULLIF(SUM(ROUND(alerts.yesterday * (CASE WHEN UPPER(countries.country) = \'OMAN\' THEN countries.convert_usd / 1000 ELSE countries.convert_usd END), 0)), 0) * 100) >= 10');
+        }
+
+        // Apply Manual Sorting
+        $hasSort = false;
+        $orders = [
+            'alerts.date' => $this->filters['sort_date'] ?? null,
+            'alerts.hour' => $this->filters['sort_hour'] ?? null,
+            'today' => $this->filters['sort_today'] ?? null,
+            'yesterday' => $this->filters['sort_yesterday'] ?? null,
+            'drop' => $this->filters['sort_drop'] ?? null,
+        ];
+
+        foreach ($orders as $col => $dir) {
+            if ($dir) {
+                if (!$hasSort) {
+                    $query->reorder();
+                    $hasSort = true;
+                }
+                
+                if ($col === 'drop') {
+                    $query->orderByRaw("((SUM(ROUND(alerts.yesterday * (CASE WHEN UPPER(countries.country) = 'OMAN' THEN countries.convert_usd / 1000 ELSE countries.convert_usd END), 0)) - SUM(ROUND(alerts.today * (CASE WHEN UPPER(countries.country) = 'OMAN' THEN countries.convert_usd / 1000 ELSE countries.convert_usd END), 0))) / NULLIF(SUM(ROUND(alerts.yesterday * (CASE WHEN UPPER(countries.country) = 'OMAN' THEN countries.convert_usd / 1000 ELSE countries.convert_usd END), 0)), 0)) $dir");
+                } else {
+                    $query->orderBy($col, $dir);
+                }
+            }
+        }
+
+        return $query;
+    }
+
+    public function table(Table $table): Table
+    {
+        $query = $this->buildFilteredQuery();
+
+        if (Schema::hasColumn('alerts', 'id_operator')) {
+             $query->with(['operator']);
+        }
+
+        // We don't need dynamic selects anymore since we use aggregate selects in buildFilteredQuery
+        
+        $tableColumns = [];
+
+        $tableColumns[] = TextColumn::make('date')->label('DATE')->date('Y-m-d')->sortable();
+        $tableColumns[] = TextColumn::make('hour')->label('HOUR')->sortable();
+        
+        $tableColumns[] = TextColumn::make('operator.operator')
+            ->label('OPERATOR')
+            ->sortable();
+            
+        $tableColumns[] = TextColumn::make('today')
+            ->label('TODAY')
+            ->formatStateUsing(function ($state) {
+                return number_format((float) $state, 0, ',', '.');
+            })
+            ->alignRight()
+            ->sortable();
+
+        $tableColumns[] = TextColumn::make('yesterday')
+            ->label('YESTERDAY')
+            ->formatStateUsing(function ($state) {
+                return number_format((float) $state, 0, ',', '.');
+            })
+            ->alignRight()
+            ->sortable();
+
+        $tableColumns[] = TextColumn::make('drop')
+            ->label('DROP')
+            ->getStateUsing(function ($record) {
+                $today = (float) ($record->today ?? 0);
+                $yesterday = (float) ($record->yesterday ?? 0);
+                
+                if ($yesterday > 0) {
+                    $revDrop = $yesterday - $today;
+                    return round(($revDrop / $yesterday) * 100, 2);
+                }
+                return 0;
+            })
+            ->formatStateUsing(fn ($state) => $state . '%')
+            ->alignRight()
+            ->sortable()
+            ->color('danger');
+            
+        $tableColumns[] = TextColumn::make('avg_drop')
+            ->label('AVG DROP')
+            ->formatStateUsing(fn ($state) => $state . '%')
+            ->alignRight()
+            ->sortable()
+            ->color('danger');
+
+        return $table
+            ->query($query)
+            ->columns($tableColumns)
+            ->filters([
+                // Handled via Filter Card
+            ])
+            ->actions([
+                \Filament\Tables\Actions\Action::make('view')
+                    ->label('View')
+                    ->icon('heroicon-o-eye')
+                    ->modalHeading(fn ($record) => "Discontinued Services ({$record->date} - Hour {$record->hour})")
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Close')
+                    ->modalContent(function ($record): ViewContract {
+                        $services = Alert::with(['service', 'country', 'operator'])
+                            ->whereDate('date', $record->date)
+                            ->where('hour', $record->hour)
+                            ->where('id_operator', $record->id_operator)
+                            ->where('type', $record->type ?? 'Revenue')
+                            ->select(['id_service', 'id_country', 'id_operator', 'today', 'yesterday', 'type', 'date', 'hour', 'drop', 'id'])
+                            ->orderBy('today', 'desc')
+                            ->get();
+
+                        $allStatuses = collect();
+                        $targetHour = null;
+                        
+                        // Status breakdown only for REVENUE type
+                        if (strtoupper($record->type ?? '') === 'REVENUE') {
+                            $allStatuses = \App\Models\SummaryStatus::query()
+                                ->where('id_operator', $record->id_operator)
+                                ->when($record->id_country, fn($q) => $q->where('id_country', $record->id_country))
+                                ->whereDate('date', $record->date)
+                                // Remove hour constraint to find the latest data of the day
+                                ->select([
+                                    'date',
+                                    'hour',
+                                    'id_service',
+                                    'status',
+                                    DB::raw('SUM(total) as total')
+                                ])
+                                ->groupBy('date', 'hour', 'id_service', 'status')
+                                ->orderBy('hour', 'desc')
+                                ->get();
+                                
+                            // Determine the latest available hour in the dataset
+                            $targetHour = $allStatuses->max('hour');
+                            
+                            // Filter to only the latest hour per service
+                            $latestHourPerService = $allStatuses->groupBy('id_service')->map(fn($g) => $g->max('hour'));
+                            
+                            $allStatuses = $allStatuses->filter(function($item) use ($latestHourPerService) {
+                                return $item->hour == $latestHourPerService[$item->id_service];
+                            });
+                        }
+
+                        // Top summary: per status, summed across all services
+                        $statuses = $allStatuses
+                            ->groupBy('status')
+                            ->map(function ($rows) {
+                                return (object) [
+                                    'status'       => $rows->first()->status,
+                                    'total_status' => $rows->sum('total'),
+                                ];
+                            })
+                            ->sortByDesc('total_status')
+                            ->values();
+
+                        // Per-service breakdown: keyed by id_service (since date is fixed)
+                        $serviceStatuses = $allStatuses->groupBy('id_service');
+
+                        $operatorName = optional(
+                            $services->first()?->operator
+                        )->operator ?? '-';
+
+                        return view('filament.pages.alert-services-modal', [
+                            'services'        => $services,
+                            'statuses'        => $statuses,
+                            'serviceStatuses' => $serviceStatuses,
+                            'operatorName'    => $operatorName,
+                            'date'            => $record->date,
+                            'hour'            => $record->hour,
+                            'statusHour'      => $targetHour,
+                        ]);
+                    }),
+            ])
+            ->deferLoading()
+            ->deselectAllRecordsWhenFiltered(false)
+            ->defaultPaginationPageOption(10)
+            ->paginated([10, 25, 50]);
+    }
+}
