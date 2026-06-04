@@ -27,7 +27,7 @@ class TableTopRevenueOperator extends BaseWidget
                     ->where('hour', 23)
                     ->where('date', $yesterday)
                     ->groupBy('operator') // Mengelompokkan berdasarkan operator_id yang ada di tabel
-                    ->orderByDesc('total_revenue')
+                    ->orderByRaw('SUM(revenue) DESC')
                     ->limit(10)
             )
             ->columns([

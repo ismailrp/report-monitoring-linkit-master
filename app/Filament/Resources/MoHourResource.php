@@ -4,7 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\MoHourResource\Pages;
 use App\Filament\Resources\MoHourResource\RelationManagers;
-use App\Models\MoHour;
+use App\Models\MOHour;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;

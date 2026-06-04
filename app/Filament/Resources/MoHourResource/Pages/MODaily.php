@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\MoHourResource\Pages;
 
 use App\Filament\Resources\MoHourResource;
-use App\Models\MoHour;
+use App\Models\MOHour;
 use Carbon\Carbon;
 use Filament\Forms\Components\Actions;
 use Filament\Forms\Components\Actions\Action;
@@ -121,10 +121,12 @@ class MODaily extends Page implements HasTable, HasForms
         }
 
         return DB::table('mo_hours')
-            ->where('operator', $operator)
+            ->join('services', 'mo_hours.id_service', '=', 'services.id')
+            ->join('operators', 'mo_hours.id_operator', '=', 'operators.id')
+            ->where('operators.operator', $operator)
             ->distinct()
-            ->orderBy('service')
-            ->pluck('service', 'service')
+            ->orderBy('services.service')
+            ->pluck('services.service', 'services.service')
             ->toArray();
     }
 
@@ -189,7 +191,7 @@ class MODaily extends Page implements HasTable, HasForms
         $operator = $this->filters['operator'] ?: null;
         $service  = $this->filters['service'] ?: null;
 
-        $query = MoHour::query()
+        $query = MOHour::query()
     // FILTER DAILY SNAPSHOT
     ->where('mo_hours.hour', 24)
 

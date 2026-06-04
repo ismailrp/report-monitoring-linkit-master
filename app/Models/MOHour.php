@@ -10,5 +10,7 @@ class MOHour extends Model
     /** @use HasFactory<\Database\Factories\MoHourFactory> */
     use HasFactory;
 
+    protected $table = 'mo_hours';
+
     public $timestamps = false;
 }

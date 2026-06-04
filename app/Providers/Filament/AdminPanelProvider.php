@@ -43,6 +43,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->brandName('Monitoring Transact')
             ->colors([
                 'primary' => Color::Teal,
             ])
@@ -94,9 +95,13 @@ class AdminPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
+            ->sidebarCollapsibleOnDesktop()
             ->spa()
             ->plugin(
                 \BezhanSalleh\FilamentShield\FilamentShieldPlugin::make(),
+            )
+            ->plugin(
+                \Leandrocfe\FilamentApexCharts\FilamentApexChartsPlugin::make(),
             )
             ->authMiddleware([
                 Authenticate::class,

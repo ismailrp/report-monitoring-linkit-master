@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\MoHourResource\Pages;
 
 use App\Filament\Resources\MoHourResource;
-use App\Models\MoHour;
+use App\Models\MOHour;
 use Carbon\Carbon;
 use Filament\Forms\Components\Actions;
 use Filament\Forms\Components\Actions\Action;

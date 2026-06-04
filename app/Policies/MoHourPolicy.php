@@ -3,7 +3,7 @@
 namespace App\Policies;
 
 use App\Models\User;
-use App\Models\MoHour;
+use App\Models\MOHour;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class MoHourPolicy

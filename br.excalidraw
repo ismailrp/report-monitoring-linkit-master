@@ -1,0 +1,51 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "https://marketplace.visualstudio.com/items?itemName=pomdtr.excalidraw-editor",
+  "elements": [
+    {
+      "id": "4yYhrTLAcVnwEO7KXtlyM",
+      "type": "text",
+      "x": 159.5625,
+      "y": 1.1624984741210938,
+      "width": 281.58752441406244,
+      "height": 108,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "index": "a0",
+      "roundness": null,
+      "seed": 410539136,
+      "version": 203,
+      "versionNonce": 650072960,
+      "isDeleted": false,
+      "boundElements": null,
+      "updated": 1780567698700,
+      "link": null,
+      "locked": false,
+      "text": "Framework:\n- Monolit Laravel + React \n- Shadcn UI\n- ApexChart",
+      "fontSize": 20,
+      "fontFamily": 6,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "Framework:\n- Monolit Laravel + React \n- Shadcn UI\n- ApexChart",
+      "autoResize": false,
+      "lineHeight": 1.35
+    }
+  ],
+  "appState": {
+    "gridSize": 20,
+    "gridStep": 5,
+    "gridModeEnabled": false,
+    "viewBackgroundColor": "#ffffff"
+  },
+  "files": {}
+}
